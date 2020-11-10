@@ -17,6 +17,8 @@ export var main_player = false
 #anim margin controls how big the player movement must be before animations are played
 var x_anim_margin = 0.1
 var y_anim_margin = 0.1
+#destination coordinates for mouse click movement
+var mouse_destination = Vector2()
 
 func _ready():
 	if "--server" in OS.get_cmdline_args():
@@ -63,6 +65,17 @@ func get_input():
 	var prev_velocity = velocity
 	movement = Vector2(0, 0)
 	if not UIManager.in_menu():
+		#2020-11-10: added mouse movement - start
+		if Input.get_action_strength('mouse'):
+			mouse_destination = get_global_mouse_position()
+			if position.distance_to(mouse_destination) < 10:
+				return
+			movement.x = mouse_destination[0] - position[0]
+			movement.y = mouse_destination[1] - position[1]
+			movement = movement.normalized()
+			return
+		#2020-11-10: added mouse movement - end
+		
 		movement.x = Input.get_action_strength('ui_right') - Input.get_action_strength('ui_left')
 		movement.y = Input.get_action_strength('ui_down') - Input.get_action_strength('ui_up')
 		movement = movement.normalized()
