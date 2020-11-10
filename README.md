@@ -2,7 +2,7 @@
 ![CI](https://github.com/opensuspect/opensuspect/workflows/CI/badge.svg?branch=main)
 # OpenSuspect
 
-*One amongst us is not like the rest*
+*One amongst us is not like the rest* :D
 
 OpenSuspect is an open source online social deduction game, like mafia.
 
