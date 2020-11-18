@@ -95,6 +95,22 @@ frames = SubResource( 6 )
 animation = "walk-h"
 playing = true
 
+[node name="MainLight" type="Light2D" parent="."]
+texture = ExtResource( 15 )
+texture_scale = 2.0
+mode = 2
+shadow_enabled = true
+
+[node name="Camera2D" type="Camera2D" parent="."]
+current = true
+drag_margin_h_enabled = true
+drag_margin_v_enabled = true
+smoothing_enabled = true
+drag_margin_left = 0.65
+drag_margin_top = 0.65
+drag_margin_right = 0.65
+drag_margin_bottom = 0.65
+
 [node name="Label" type="Label" parent="."]
 material = SubResource( 7 )
 margin_left = -250.0
@@ -106,10 +122,5 @@ align = 1
 __meta__ = {
 "_edit_use_anchors_": false
 }
-
-[node name="temporaryLight" type="Light2D" parent="."]
-editor_only = true
-texture = ExtResource( 15 )
-mode = 2
 [connection signal="body_entered" from="interactarea" to="interactarea" method="_on_interactarea_body_entered"]
 [connection signal="body_exited" from="interactarea" to="interactarea" method="_on_interactarea_body_exited"]

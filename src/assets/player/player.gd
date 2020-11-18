@@ -9,7 +9,6 @@ var id: int
 var ourname: String
 var myRole: String
 var velocity = Vector2(0,0)
-var spawned = []
 # Contains the current intended movement direction and magnitude in range 0 to 1
 var movement = Vector2(0,0)
 # Only true when this is the player being controlled
@@ -20,15 +19,27 @@ var y_anim_margin = 0.1
 #destination coordinates for mouse click movement
 var mouse_destination = Vector2()
 
+# The input number is incremented on each _physics_process call. GDScript's int
+# type is int64_t which is enough for thousands of years of gameplay
+var input_number: int = 0
+# Contains the last input number that the server has received
+var last_reveived_input: int = 0
+# Contains the movement values for unreceived inputs and matching previous
+# velocities for movement prediciton. The values are stored as Arrays of
+# movement and previous velocity.
+var input_queue: Array = []
+
 func _ready():
 	if "--server" in OS.get_cmdline_args():
 		main_player = false
 	if main_player:
 		setName(Network.get_player_name())
 		id = Network.get_my_id()
-		#so light occluders don't hide your own sprite
-		#$Sprite.material.set_light_mode(1)
-		#$Label.material.set_light_mode(1)
+	else:
+		$MainLight.queue_free()
+		$Camera2D.queue_free()
+	#TODO: tell the player node their role upon creation in main.gd
+	roles_assigned(PlayerManager.get_player_roles())
 # warning-ignore:return_value_discarded
 	PlayerManager.connect("roles_assigned", self, "roles_assigned")
 
@@ -37,13 +48,11 @@ func setName(newName):
 	$Label.text = ourname
 
 func roles_assigned(playerRoles: Dictionary):
-	print("id: ", id)
-	if id == 0: #if id hasn't been set to anything
-		myRole = playerRoles[Network.get_my_id()]
-	else:
-		myRole = playerRoles[id]
+	#print("id: ", id)
+	if not playerRoles.keys().has(id):
+		return
+	myRole = playerRoles[id]
 	changeNameColor(myRole)
-	pass
 
 func changeNameColor(role: String):
 	match role:
@@ -61,8 +70,6 @@ func setNameColor(newColor: Color):
 
 # Only called when main_player is true
 func get_input():
-# warning-ignore:unused_variable
-	var prev_velocity = velocity
 	movement = Vector2(0, 0)
 	if not UIManager.in_menu():
 		#2020-11-10: added mouse movement - start
@@ -80,19 +87,27 @@ func get_input():
 		movement.y = Input.get_action_strength('ui_down') - Input.get_action_strength('ui_up')
 		movement = movement.normalized()
 
+func run_physics(motion):
+	var prev_velocity = velocity
+	velocity = motion * speed
+	#interpolate velocity:
+	if velocity.x == 0:
+		velocity.x = lerp(prev_velocity.x, 0, 0.17)
+	if velocity.y == 0:
+		velocity.y = lerp(prev_velocity.y, 0, 0.17)
+	# TODO: provide a delta value to this function and use it here
+	velocity = move_and_slide(velocity)
+
 func _physics_process(_delta):
 	if main_player:
 		get_input()
-		emit_signal("main_player_moved", movement)
-	if get_tree().is_network_server():
-		var prev_velocity = velocity
-		velocity = movement * speed
-		#interpolate velocity:
-		if velocity.x == 0:
-			velocity.x = lerp(prev_velocity.x, 0, 0.17)
-		if velocity.y == 0:
-			velocity.y = lerp(prev_velocity.y, 0, 0.17)
-		velocity = move_and_slide(velocity)
+		input_number += 1
+		input_queue.push_back([movement, velocity])
+		emit_signal("main_player_moved", movement, input_number)
+	# Remove this if check to get bad movement extrapolation for all players
+	if main_player or get_tree().is_network_server():
+		run_physics(movement)
+
 	# We handle animations and stuff here
 	if movement.x > x_anim_margin:
 		$Sprite.play("walk-h")
@@ -106,6 +121,23 @@ func _physics_process(_delta):
 		$Sprite.play("walk-up")
 	else:
 		$Sprite.play("idle")
+
+# Only called on the main player. Rerolls the player's unreceived inputs on top
+# of the server's player position
+func _on_positions_updated(new_last_received_input: int):
+	if new_last_received_input > input_number:
+		# The map has probably changed when this happens
+		return
+	# Remove received inputs from the queue
+	for _i in range(new_last_received_input - last_reveived_input):
+		input_queue.pop_front()
+	last_reveived_input = new_last_received_input
+	# Set the initial velocity to predict velocity slowdown correctly
+	if input_queue.size() >= 1:
+		velocity = input_queue[0][1]
+	# Run the physics model for the unreceived inputs
+	for i in input_queue:
+		run_physics(i[0])
 
 func move_to(new_pos, new_movement):
 	position = new_pos
